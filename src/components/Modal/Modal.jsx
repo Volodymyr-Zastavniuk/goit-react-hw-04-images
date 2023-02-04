@@ -2,7 +2,7 @@ import * as basicLightbox from 'basiclightbox';
 import 'basiclightbox/dist/basicLightbox.min.css';
 import PropTypes from 'prop-types';
 
-const Modal = ({ largeImageURL }) => {
+const Modal = ({ largeImageURL, onClose }) => {
   const instance = basicLightbox.create(
     `<img src=${largeImageURL}> width="800" height="600"`,
     {
@@ -11,6 +11,7 @@ const Modal = ({ largeImageURL }) => {
       },
       onClose: () => {
         document.removeEventListener('keydown', closeOnEscape);
+        onClose('');
       },
     }
   );

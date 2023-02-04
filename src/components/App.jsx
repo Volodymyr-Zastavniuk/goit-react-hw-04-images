@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useEffect, useState } from 'react';
 import { ToastContainer } from 'react-toastify';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.min.css';
@@ -17,108 +17,92 @@ const STATUS = {
   error: 'error',
 };
 
-export default class App extends Component {
-  state = {
-    query: '',
-    page: 1,
-    images: [],
-    loadMore: false,
-    status: STATUS.idle,
-    largeImageURL: '',
-    idToScroll: null,
-  };
+export default function App() {
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [images, setImages] = useState([]);
+  const [loadMore, setLoadMore] = useState(false);
+  const [status, setStatus] = useState(STATUS.idle);
+  const [largeImageURL, setLargeImageURL] = useState('');
+  const [idToScroll, setIdToScroll] = useState(null);
 
-  async componentDidUpdate(_, prevState) {
-    const { query, page, images, idToScroll } = this.state;
+  const isLoading = status === STATUS.loading;
+  useEffect(() => {
+    if (query !== '') {
+      setStatus(STATUS.loading);
+      setLargeImageURL('');
+      async function fetchData() {
+        try {
+          const { hits, totalHits } = await API.fetchImages(query, page);
 
-    if (images.length > API.PER_PAGE && idToScroll) {
+          if (hits.length === 0) {
+            setLoadMore(false);
+            setStatus(STATUS.idle);
+            return toast.error(
+              'No images found with this name, please try another name'
+            );
+          } else {
+            setImages(images => [...images, ...hits]);
+            setStatus(STATUS.success);
+            setLoadMore(totalHits / API.PER_PAGE > page);
+            setIdToScroll(hits.length ? hits[0].id : null);
+          }
+        } catch (error) {
+          console.log(error);
+          setStatus(STATUS.error);
+        }
+      }
+      fetchData();
+    }
+  }, [page, query]);
+
+  useEffect(() => {
+    if (idToScroll) {
       const elem = document.getElementById(idToScroll);
       elem.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       });
-      this.setState({ idToScroll: null });
     }
+    setIdToScroll(null);
+  }, [idToScroll]);
 
-    if (prevState.query !== query || prevState.page !== page) {
-      this.setState({ status: STATUS.loading });
-
-      try {
-        const { hits, totalHits } = await API.fetchImages(query, page);
-        if (hits.length === 0) {
-          toast.error(
-            'No images found with this name, please try another name'
-          );
-        }
-        this.setState(prevState => ({
-          images: [...prevState.images, ...hits],
-          loadMore: totalHits / API.PER_PAGE > page,
-          status: STATUS.success,
-          idToScroll: hits.length ? hits[0].id : null,
-        }));
-      } catch (error) {
-        console.log(error);
-        this.setState({ status: STATUS.error });
-      }
-    }
-  }
-
-  handleSearchbarSubmit = searchQuery => {
-    const { query, images } = this.state;
-    if (searchQuery === query && images.length === 0) {
-      toast.error('No images found with this name, please try another name');
-    }
-
+  const handleSearchbarSubmit = searchQuery => {
     if (searchQuery === query && images.length) {
       return toast.error(
         'These images are already shown, please enter another image name'
       );
     }
 
-    this.setState({
-      query: searchQuery,
-      page: 1,
-      images: [],
-      largeImageURL: '',
-    });
+    setQuery(searchQuery);
+    setPage(1);
+    setImages([]);
   };
 
-  handleLoadMoreBtnClick = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-      largeImageURL: '',
-    }));
+  const handleLoadMoreBtnClick = () => {
+    setPage(page => page + 1);
   };
 
-  handleImageClick = largeImageURL => {
-    this.setState({ largeImageURL: largeImageURL });
-  };
+  return (
+    <>
+      <Searchbar
+        onSubmit={handleSearchbarSubmit}
+        isLoading={isLoading}
+      ></Searchbar>
 
-  render() {
-    const { status, images, loadMore, largeImageURL } = this.state;
-    const isLoading = status === STATUS.loading;
-    return (
-      <>
-        <Searchbar
-          onSubmit={this.handleSearchbarSubmit}
-          isLoading={isLoading}
-        ></Searchbar>
+      <ImageGallery images={images} onClick={setLargeImageURL}></ImageGallery>
 
-        <ImageGallery
-          images={images}
-          onClick={this.handleImageClick}
-        ></ImageGallery>
+      {isLoading && <Loader />}
 
-        {isLoading && <Loader />}
+      {loadMore && !isLoading && (
+        <Button onClick={handleLoadMoreBtnClick} isLoading={isLoading} />
+      )}
 
-        {loadMore && !isLoading && (
-          <Button onClick={this.handleLoadMoreBtnClick} isLoading={isLoading} />
-        )}
+      {largeImageURL && (
+        <Modal largeImageURL={largeImageURL} onClose={setLargeImageURL} />
+      )}
 
-        {largeImageURL && <Modal largeImageURL={largeImageURL} />}
-
-        <ToastContainer autoClose={2000} />
-      </>
-    );
-  }
+      <ToastContainer autoClose={2000} />
+    </>
+  );
 }
